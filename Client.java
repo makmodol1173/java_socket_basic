@@ -1,11 +1,11 @@
-
 import java.io.*;
 import java.net.*;
 
- class Client {
-     Socket socket = null;
-     BufferedReader input = null;
-     DataOutputStream out = null;
+class Client {
+    Socket socket = null;
+    BufferedReader input = null;
+    DataOutputStream out = null;
+    DataInputStream serverIn = null; // New data input stream for server messages
 
     Client(String address, int port) {
         try {
@@ -14,8 +14,22 @@ import java.net.*;
 
             input = new BufferedReader(new InputStreamReader(System.in));
             out = new DataOutputStream(socket.getOutputStream());
+            serverIn = new DataInputStream(new BufferedInputStream(socket.getInputStream())); // Initialize server input stream
 
             String line = "";
+
+            // Start a new thread to read and display server messages
+            Thread serverReaderThread = new Thread(() -> {
+                try {
+                    while (true) {
+                        String serverMessage = serverIn.readUTF();
+                        System.out.println("Server: " + serverMessage);
+                    }
+                } catch (IOException e) {
+                    System.out.println("Error reading from server: " + e);
+                }
+            });
+            serverReaderThread.start();
 
             while (!line.equals("Over")) {
                 try {
@@ -38,6 +52,6 @@ import java.net.*;
     }
 
     public static void main(String[] args) {
-        Client client = new Client("127.0.0.1", 5000);
+        Client client = new Client("192.168.0.175", 5000);
     }
 }

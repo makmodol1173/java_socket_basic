@@ -1,8 +1,11 @@
 import java.net.*;
 import java.io.*;
+import java.util.ArrayList;
+import java.util.List;
 
 class Server {
     ServerSocket server = null;
+    List<ClientHandler> clients = new ArrayList<>();
 
     Server(int port) {
         try {
@@ -14,8 +17,8 @@ class Server {
                 Socket socket = server.accept();
                 System.out.println("Client accepted");
 
-                // Create a new thread to handle the client
                 ClientHandler clientHandler = new ClientHandler(socket);
+                clients.add(clientHandler); // Add the client handler to the list
                 Thread thread = new Thread(clientHandler);
                 thread.start();
             }
@@ -29,9 +32,10 @@ class Server {
     }
 
     // Inner class to handle a client in a separate thread
-    private static class ClientHandler implements Runnable {
+    private class ClientHandler implements Runnable {
         private Socket socket;
         private DataInputStream in;
+        private DataOutputStream out;
 
         public ClientHandler(Socket socket) {
             this.socket = socket;
@@ -41,6 +45,7 @@ class Server {
         public void run() {
             try {
                 in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
+                out = new DataOutputStream(socket.getOutputStream());
 
                 String line = "";
                 while (!line.equals("Over")) {
@@ -48,7 +53,8 @@ class Server {
                         line = in.readUTF();
                         System.out.println(line);
 
-                        // You can add code here to send data back to the client if needed
+                        // Broadcast the received message to all clients
+                        broadcastMessage(line);
 
                     } catch (IOException e) {
                         System.out.println(e);
@@ -58,8 +64,30 @@ class Server {
 
                 socket.close();
                 in.close();
+                out.close();
+                clients.remove(this); // Remove this client handler from the list
             } catch (IOException e) {
                 System.out.println(e);
+            }
+        }
+
+        // Broadcast a message to all connected clients
+        private void broadcastMessage(String message) {
+            for (ClientHandler client : clients) {
+                try {
+                    client.out.writeUTF(message);
+                } catch (IOException e) {
+                    System.out.println("Error broadcasting message: " + e);
+                }
+            }
+        }
+        
+        // Method to send a message to this client
+        public void sendMessage(String message) {
+            try {
+                out.writeUTF(message);
+            } catch (IOException e) {
+                System.out.println("Error sending message to client: " + e);
             }
         }
     }
