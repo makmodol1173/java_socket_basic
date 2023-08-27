@@ -1,57 +1,86 @@
+import javax.imageio.IIOException;
 import java.io.*;
-import java.net.*;
+import java.net.Socket;
+import java.util.Scanner;
 
-class Client {
-    Socket socket = null;
-    BufferedReader input = null;
-    DataOutputStream out = null;
-    DataInputStream serverIn = null; // New data input stream for server messages
+public class Client {
 
-    Client(String address, int port) {
+    private Socket socket;
+    private BufferedReader bufferedReader;
+    private BufferedWriter bufferedWriter;
+    private String username;
+
+    public Client(Socket socket, String  username) {
         try {
-            socket = new Socket(address, port);
-            System.out.println("Connected");
+            this.socket = socket;
+            this.bufferedWriter = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+            this.bufferedReader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            this.username = username;
+        } catch (IOException e) {
+            closeEverything(socket, bufferedReader, bufferedWriter);
+        }
+    }
+    public void sendMessage() {
+        try {
+            bufferedWriter.write(username);
+            bufferedWriter.newLine();
+            bufferedWriter.flush();
 
-            input = new BufferedReader(new InputStreamReader(System.in));
-            out = new DataOutputStream(socket.getOutputStream());
-            serverIn = new DataInputStream(new BufferedInputStream(socket.getInputStream())); // Initialize server input stream
-
-            String line = "";
-
-            // Start a new thread to read and display server messages
-            Thread serverReaderThread = new Thread(() -> {
-                try {
-                    while (true) {
-                        String serverMessage = serverIn.readUTF();
-                        System.out.println("Server: " + serverMessage);
-                    }
-                } catch (IOException e) {
-                    System.out.println("Error reading from server: " + e);
-                }
-            });
-            serverReaderThread.start();
-
-            while (!line.equals("Over")) {
-                try {
-                    line = input.readLine();
-                    out.writeUTF(line);
-                } catch (IOException i) {
-                    System.out.println(i);
-                }
+            Scanner scanner = new Scanner(System.in);
+            while(socket.isConnected()) {
+                String messageToSend = scanner.nextLine();
+                bufferedWriter.write(username+": " + messageToSend);
+                bufferedWriter.newLine();
+                bufferedWriter.flush();
             }
-
-            input.close();
-            out.close();
-            socket.close();
-
-        } catch (UnknownHostException u) {
-            System.out.println(u);
-        } catch (IOException i) {
-            System.out.println(i);
+        } catch (IOException e) {
+            closeEverything(socket, bufferedReader, bufferedWriter);
         }
     }
 
-    public static void main(String[] args) {
-        Client client = new Client("192.168.0.175", 5000);
+    public void listenMessage() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                String msgFromgrpchat;
+
+                while(socket.isConnected()) {
+                    try {
+                        msgFromgrpchat = bufferedReader.readLine();
+                        System.out.println(msgFromgrpchat);
+                    } catch (IOException e) {
+                        closeEverything(socket, bufferedReader, bufferedWriter);
+                    }
+                }
+            }
+        }).start();
+    }
+
+    public void closeEverything(Socket socket, BufferedReader bufferedReader, BufferedWriter bufferedWriter) {
+        try {
+            if(bufferedReader != null) {
+                bufferedReader.close();
+            }
+            if(bufferedWriter != null) {
+                bufferedWriter.close();
+            }
+            if(socket != null) {
+                socket.close();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void main(String[] args) throws IOException {
+
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Enter your Name:");
+        String username = scanner.nextLine();
+
+        Socket socket = new Socket("192.168.0.117", 1234);
+        Client client = new Client(socket, username);
+        client.listenMessage();;
+        client.sendMessage();
     }
 }
